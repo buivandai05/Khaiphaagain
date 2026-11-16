@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}Preprocessing - AoG Analytics{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fa-solid fa-filter text-warning me-2"></i> Preprocessing (Tiền Xử Lý Dữ Liệu)</h2>
+    <button class="btn btn-outline-info" onclick="location.reload()">
+        <i class="fa-solid fa-arrows-rotate me-1"></i> Làm Mới Dữ Liệu
+    </button>
+</div>
+
+<!-- Mô tả quy trình -->
+<div class="card card-custom p-4 mb-4">
+    <h5 class="text-info"><i class="fa-solid fa-gears me-2"></i> Quy Trình Chuẩn Hóa Transaction</h5>
+    <ul class="mb-0 mt-2 text-muted">
+        <li>1. Đọc cột <code>hero_ids</code> và dùng <code>json.loads()</code> chuyển chuỗi JSON thành Python List.</li>
+        <li>2. Thêm tiền tố <code>HERO::</code> trước ID từng tướng để phân biệt với kết quả.</li>
+        <li>3. Chuyển đổi cột <code>is_winner</code> thành phần tử <code>RESULT::WIN</code> hoặc <code>RESULT::LOSE</code>.</li>
+        <li>4. Gộp 5 phần tử tướng và 1 phần tử kết quả thành 1 Transaction duy nhất đại diện cho 1 đội trong trận.</li>
+    </ul>
+</div>
+
+<!-- Mẫu dữ liệu đã xử lý -->
+<div class="card card-custom p-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5><i class="fa-solid fa-table-list me-2"></i> Mẫu Kết Quả Transactions Đã Chuẩn Hóa</h5>
+        <span class="badge bg-success">462 Transactions Thành Công</span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-dark table-striped table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>STT</th>
+                    <th>Danh Sách Phần Tử Trong Transaction (Items)</th>
+                    <th>Số Lượng Tướng</th>
+                    <th>Kết Quả Trận</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td><code>HERO::62b51229...</code>, <code>HERO::4a963a79...</code>, <code>RESULT::LOSE</code></td>
+                    <td><span class="badge bg-secondary">5 Tướng</span></td>
+                    <td><span class="badge bg-danger">LOSE</span></td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td><code>HERO::eee25327...</code>, <code>HERO::9f1f2f8f...</code>, <code>RESULT::WIN</code></td>
+                    <td><span class="badge bg-secondary">5 Tướng</span></td>
+                    <td><span class="badge bg-success">WIN</span></td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td><code>HERO::cdc3ae9d...</code>, <code>HERO::d7f7fe67...</code>, <code>RESULT::WIN</code></td>
+                    <td><span class="badge bg-secondary">5 Tướng</span></td>
+                    <td><span class="badge bg-success">WIN</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

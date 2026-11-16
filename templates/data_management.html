@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}Data Management - AoG Analytics{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fa-solid fa-database text-info me-2"></i> Data Management (Quản Lý Dữ Liệu Thô)</h2>
+    <span class="badge bg-primary p-2">Tập dữ liệu: association_train.csv</span>
+</div>
+
+<!-- Thống kê file -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="text-muted small">Số Dòng (Records)</div>
+            <div class="number">462</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="text-muted small">Số Cột (Columns)</div>
+            <div class="number">18</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="text-muted small">Dữ Liệu Khuyết Thiếu (Missing)</div>
+            <div class="number text-success">0</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="text-muted small">Trạng Thái Dữ Liệu</div>
+            <div class="number text-info" style="font-size: 20px;">Training-Ready</div>
+        </div>
+    </div>
+</div>
+
+<!-- Chi tiết danh sách trường dữ liệu -->
+<div class="card card-custom p-4 mb-4">
+    <h5 class="mb-3"><i class="fa-solid fa-list-check me-2"></i> Các Trường Dữ Liệu Trọng Tâm For Mining</h5>
+    <div class="table-responsive">
+        <table class="table table-dark table-hover table-bordered mb-0">
+            <thead>
+                <tr class="table-secondary text-dark">
+                    <th>Tên Trường (Column)</th>
+                    <th>Kiểu Dữ Liệu (Dtype)</th>
+                    <th>Mô Tả Chức Năng</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>game_id</code></td>
+                    <td>string (UUID)</td>
+                    <td>Định danh duy nhất cho từng trận đấu.</td>
+                </tr>
+                <tr>
+                    <td><code>team_id</code></td>
+                    <td>string (UUID)</td>
+                    <td>Định danh cho đội tuyển tham gia trong trận.</td>
+                </tr>
+                <tr>
+                    <td><code>hero_ids</code></td>
+                    <td>string (JSON List)</td>
+                    <td>Danh sách ID/UUID 5 tướng được đội tuyển chọn.</td>
+                </tr>
+                <tr>
+                    <td><code>is_winner</code></td>
+                    <td>boolean (True/False)</td>
+                    <td>Kết quả trận đấu của đội (True: Thắng, False: Thua).</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
