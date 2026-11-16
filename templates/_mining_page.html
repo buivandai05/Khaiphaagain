@@ -1,0 +1,57 @@
+<section class="card card-custom p-4 mb-4">
+  <h5 class="mb-2">Ngưỡng khai phá</h5>
+  <p class="text-secondary">Ngưỡng mặc định lấy từ backend. Các thuật toán dùng chung định nghĩa Support trên toàn bộ transaction.</p>
+  <div class="row g-3 align-items-end">
+    <div class="col-lg-3 col-md-4">
+      <label for="minSup" class="form-label">Minimum Support (0–1)</label>
+      <input type="number" id="minSup" class="form-control" min="0" max="1" step="0.01" value="{{ defaults.min_support }}">
+      <div class="form-text">Tỷ lệ transaction cần chứa itemset. Support = số transaction chứa X / tổng transaction. Ví dụ: 462 transaction, ngưỡng 0.03 cần ít nhất 14 lần xuất hiện.</div>
+    </div>
+    <div class="col-lg-3 col-md-4">
+      <label for="minConf" class="form-label">Minimum Confidence (0–1)</label>
+      <input type="number" id="minConf" class="form-control" min="0" max="1" step="0.05" value="{{ defaults.min_confidence }}">
+      <div class="form-text">Tỷ lệ xuất hiện vế sau khi đã có vế trước: Support(A ∪ B) / Support(A). Ví dụ minh họa, không phải kết quả: 17/20 transaction có combo Aya + Taara thắng → 85%.</div>
+    </div>
+    <div class="col-lg-3 col-md-4">
+      <label for="minLift" class="form-label">Minimum Lift (≥ 0)</label>
+      <input type="number" id="minLift" class="form-control" min="0" step="0.1" value="{{ defaults.min_lift }}">
+      <div class="form-text">Lift = Confidence / Support(B). Trên 1: liên hệ thuận; bằng 1: độc lập theo độ đo này; dưới 1: liên hệ nghịch.</div>
+    </div>
+    <div class="col-lg-3 col-md-12">
+      <button class="btn btn-info w-100" id="runMining"><i class="fa-solid fa-play me-2"></i>Chạy {{ algorithm_label }}</button>
+    </div>
+  </div>
+  <div class="alert alert-danger d-none mt-3 mb-0" id="pageError" role="alert"></div>
+  <div class="text-info mt-3 d-none" id="pageLoading"><i class="fa-solid fa-spinner fa-spin me-2"></i>Đang khai phá dữ liệu...</div>
+</section>
+
+<div id="miningResults" class="d-none" data-algorithm="{{ algorithm }}">
+  <div class="row g-3 mb-4">
+    <div class="col-md"><div class="stat-card"><div class="stat-label">Thời gian khai phá</div><div class="number" id="statTime">—</div><small class="text-secondary">Thời gian chạy thuật toán và sinh luật.</small></div></div>
+    <div class="col-md"><div class="stat-card"><div class="stat-label">Frequent itemsets</div><div class="number" id="statItemsets">—</div><small class="text-secondary">Các tập đạt Minimum Support.</small></div></div>
+    <div class="col-md"><div class="stat-card"><div class="stat-label">Association rules</div><div class="number" id="statRules">—</div><small class="text-secondary">Luật đạt Confidence và Lift.</small></div></div>
+    <div class="col-md"><div class="stat-card"><div class="stat-label">Luật hướng WIN</div><div class="number text-success" id="statWin">—</div><small class="text-secondary">Vế sau chính xác là RESULT::WIN.</small></div></div>
+    <div class="col-md"><div class="stat-card"><div class="stat-label">Luật hướng LOSE</div><div class="number text-danger" id="statLose">—</div><small class="text-secondary">Vế sau chính xác là RESULT::LOSE.</small></div></div>
+  </div>
+
+  <section class="card card-custom p-4 mb-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><div><h5>Frequent itemsets</h5><p class="text-secondary mb-0">UUID giữ trong backend; tên tướng chỉ được thay ở lớp hiển thị.</p></div>
+      <label class="filter-label">Kích thước
+        <select id="itemsetSize" class="form-select form-select-sm"><option value="all">Tất cả</option><option value="1">1 phần tử</option><option value="2">2 phần tử</option><option value="3">3 phần tử</option><option value="4">4 phần tử trở lên</option></select>
+      </label>
+    </div>
+    <div class="table-responsive mt-3"><table class="table table-dark table-hover align-middle"><thead><tr><th>#</th><th>Tập phần tử</th><th>Số phần tử</th><th>Support</th><th>Số transaction</th></tr></thead><tbody id="itemsetsBody"><tr><td colspan="5" class="empty-state">Chạy thuật toán để xem kết quả thật.</td></tr></tbody></table></div>
+    <div class="d-flex justify-content-between align-items-center"><small id="itemsetsPageInfo" class="text-secondary"></small><div><button class="btn btn-sm btn-outline-info me-2" id="itemsetsPrev">Trước</button><button class="btn btn-sm btn-outline-info" id="itemsetsNext">Tiếp</button></div></div>
+  </section>
+
+  <section class="card card-custom p-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><div><h5>Association rules</h5><p class="text-secondary mb-0">Luật thể hiện mối liên hệ thống kê, không chứng minh quan hệ nhân quả.</p></div>
+      <div class="d-flex flex-wrap gap-2"><input id="ruleSearch" class="form-control form-control-sm" placeholder="Tìm tên tướng..." aria-label="Tìm luật theo tên tướng">
+        <select id="ruleResult" class="form-select form-select-sm"><option value="all">Mọi luật</option><option value="WIN">Kết quả WIN</option><option value="LOSE">Kết quả LOSE</option><option value="other">Luật khác</option></select>
+        <select id="ruleSort" class="form-select form-select-sm"><option value="confidence">Sắp xếp Confidence</option><option value="lift">Sắp xếp Lift</option><option value="support">Sắp xếp Support</option></select></div>
+    </div>
+    <div class="table-responsive mt-3"><table class="table table-dark table-hover align-middle"><thead><tr><th>#</th><th>Vế trước</th><th>Vế sau</th><th>Support</th><th>Confidence</th><th>Lift</th></tr></thead><tbody id="rulesBody"><tr><td colspan="6" class="empty-state">Chạy thuật toán để xem kết quả thật.</td></tr></tbody></table></div>
+    <div class="d-flex justify-content-between align-items-center"><small id="rulesPageInfo" class="text-secondary"></small><div><button class="btn btn-sm btn-outline-info me-2" id="rulesPrev">Trước</button><button class="btn btn-sm btn-outline-info" id="rulesNext">Tiếp</button></div></div>
+  </section>
+</div>
+<script src="{{ url_for('static', filename='js/mining.js') }}"></script>

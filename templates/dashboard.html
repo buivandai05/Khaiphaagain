@@ -1,92 +1,12 @@
 {% extends 'base.html' %}
-
 {% block title %}Dashboard - AoG Analytics{% endblock %}
-
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Dashboard Tổng Quan</h2>
-    <span class="badge bg-success p-2"><i class="fa-solid fa-circle-check"></i> System Ready</span>
-</div>
-
-<!-- 4 Thống kê chính -->
-<div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="stat-card">
-            <div class="text-muted small">Tổng Số Trận Đấu</div>
-            <div class="number">{{ stats.total_games if stats else 0 }}</div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="stat-card">
-            <div class="text-muted small">Tổng Số Đội Tham Gia</div>
-            <div class="number">{{ stats.total_teams if stats else 0 }}</div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="stat-card">
-            <div class="text-muted small">Số Tướng Xuất Hiện</div>
-            <div class="number">{{ stats.unique_heroes if stats else 0 }}</div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="stat-card">
-            <div class="text-muted small">Tổng Transactions</div>
-            <div class="number">{{ stats.total_transactions if stats else 0 }}</div>
-        </div>
-    </div>
-</div>
-
-<!-- Khu vực Biểu đồ & Tỷ lệ Win/Lose -->
-<div class="row g-3">
-    <div class="col-md-8">
-        <div class="card card-custom p-3">
-            <h5><i class="fa-solid fa-chart-pie me-2"></i> Phân Bố Trận Thắng / Thua</h5>
-            <div style="height: 300px;" class="d-flex justify-content-center align-items-center">
-                <canvas id="winLoseChart"></canvas>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card card-custom p-3">
-            <h5><i class="fa-solid fa-trophy me-2"></i> Tỷ Lệ Thắng/Thua</h5>
-            <ul class="list-group list-group-flush bg-transparent mt-3">
-                <li class="list-group-item bg-transparent text-white d-flex justify-content-between">
-                    <span>Số trận Thắng (WIN):</span>
-                    <strong class="text-success">{{ stats.win_count if stats else 0 }}</strong>
-                </li>
-                <li class="list-group-item bg-transparent text-white d-flex justify-content-between">
-                    <span>Số trận Thua (LOSE):</span>
-                    <strong class="text-danger">{{ stats.lose_count if stats else 0 }}</strong>
-                </li>
-            </ul>
-        </div>
-    </div>
-</div>
+<div class="page-heading"><div><span class="eyebrow">AOG SPRING 2026 · DATA MINING</span><h2>Dashboard tổng quan</h2><p class="text-secondary">Thống kê từ association_train.csv; mỗi transaction tương ứng một đội trong một trận.</p></div><a class="btn btn-outline-info" href="{{ url_for('main.preprocessing') }}">Xem dữ liệu tiền xử lý</a></div>
+{% if stats.error %}<div class="alert alert-danger">Không thể đọc dữ liệu: {{ stats.error }}</div>{% else %}
+<div class="row g-3 mb-4"><div class="col-md-3"><div class="stat-card"><div class="stat-label">Trận có dữ liệu</div><div class="number">{{ stats.total_games }}</div></div></div><div class="col-md-3"><div class="stat-card"><div class="stat-label">Transactions đội</div><div class="number">{{ stats.total_transactions }}</div></div></div><div class="col-md-3"><div class="stat-card"><div class="stat-label">Tướng khác nhau</div><div class="number">{{ stats.unique_heroes }}</div></div></div><div class="col-md-3"><div class="stat-card"><div class="stat-label">UUID chưa ánh xạ</div><div class="number">{{ stats.unmapped_hero_ids }}</div></div></div></div>
+<div class="row g-3"><div class="col-lg-8"><section class="card card-custom p-4"><h5>Phân bố kết quả transaction</h5><p class="text-secondary">WIN và LOSE là kết quả của đội, không phải số trận duy nhất.</p><div class="chart-box"><canvas id="winLoseChart"></canvas></div></section></div><div class="col-lg-4"><section class="card card-custom p-4 h-100"><h5>Kết quả dữ liệu</h5><div class="d-flex justify-content-between border-bottom py-3"><span>Đội thắng (WIN)</span><strong class="result-win">{{ stats.win_count }}</strong></div><div class="d-flex justify-content-between py-3"><span>Đội thua (LOSE)</span><strong class="result-lose">{{ stats.lose_count }}</strong></div><a href="{{ url_for('main.apriori_page') }}" class="btn btn-info mt-auto">Bắt đầu khai phá</a></section></div></div>
+{% endif %}
 {% endblock %}
-
-{% block scripts %}
-<script>
-    // Sử dụng Jinja2 filter default để ép kiểu an toàn và hết gạch đỏ VS Code
-    const winCount = Number("{{ stats.win_count | default(0) }}");
-    const loseCount = Number("{{ stats.lose_count | default(0) }}");
-
-    const ctx = document.getElementById('winLoseChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Thắng (WIN)', 'Thua (LOSE)'],
-            datasets: [{
-                data: [winCount, loseCount],
-                backgroundColor: ['#06d6a0', '#ef476f']
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { labels: { color: '#edf2f4' } }
-            }
-        }
-    });
-</script>
-{% endblock %}
+{% block scripts %}{% if not stats.error %}<script>
+new Chart(document.getElementById('winLoseChart'),{type:'doughnut',data:{labels:['Đội thắng (WIN)','Đội thua (LOSE)'],datasets:[{data:[{{ stats.win_count }},{{ stats.lose_count }}],backgroundColor:['#35d6a1','#ff718d'],borderColor:'#1c2541',borderWidth:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#f2f6ff'}}}}});
+</script>{% endif %}{% endblock %}

@@ -1,64 +1,23 @@
 {% extends 'base.html' %}
-
 {% block title %}Preprocessing - AoG Analytics{% endblock %}
-
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fa-solid fa-filter text-warning me-2"></i> Preprocessing (Tiền Xử Lý Dữ Liệu)</h2>
-    <button class="btn btn-outline-info" onclick="location.reload()">
-        <i class="fa-solid fa-arrows-rotate me-1"></i> Làm Mới Dữ Liệu
-    </button>
+<div class="page-heading"><div><span class="eyebrow">DỮ LIỆU ĐẦU VÀO</span><h2><i class="fa-solid fa-filter text-info me-2"></i>Tiền xử lý</h2><p class="text-secondary">Mỗi dòng trong association_train.csv được chuyển thành một transaction của đúng một đội.</p></div><button id="refreshData" class="btn btn-outline-info"><i class="fa-solid fa-arrows-rotate me-2"></i>Làm mới dữ liệu</button></div>
+<section class="card card-custom p-4 mb-4"><h5>Quy trình chuẩn hóa transaction</h5><ol id="processSteps" class="process-steps mb-0"><li class="text-secondary">Đang tải mô tả quy trình...</li></ol></section>
+<div id="preprocessError" class="alert alert-danger d-none" role="alert"></div>
+<div id="preprocessLoading" class="loading-state"><i class="fa-solid fa-spinner fa-spin me-2"></i>Đang đọc dữ liệu training...</div>
+<div id="preprocessContent" class="d-none">
+  <div class="row g-3 mb-4">
+    <div class="col-md-4 col-lg"><div class="stat-card"><div class="stat-label">Transactions</div><div class="number" id="ppTotal">—</div></div></div>
+    <div class="col-md-4 col-lg"><div class="stat-card"><div class="stat-label">Tướng khác nhau</div><div class="number" id="ppHeroes">—</div></div></div>
+    <div class="col-md-4 col-lg"><div class="stat-card"><div class="stat-label">WIN</div><div class="number text-success" id="ppWins">—</div></div></div>
+    <div class="col-md-4 col-lg"><div class="stat-card"><div class="stat-label">LOSE</div><div class="number text-danger" id="ppLoses">—</div></div></div>
+    <div class="col-md-4 col-lg"><div class="stat-card"><div class="stat-label">Đủ 5 tướng</div><div class="number" id="ppComplete">—</div></div></div>
+    <div class="col-md-4 col-lg"><div class="stat-card"><div class="stat-label">UUID chưa ánh xạ</div><div class="number" id="ppUnmapped">—</div></div></div>
+  </div>
+  <section class="card card-custom p-4"><div class="d-flex justify-content-between flex-wrap gap-2"><div><h5>Transactions đã chuẩn hóa</h5><p class="text-secondary mb-0">Tên được lấy từ heroes.csv. UUID không ánh xạ được sẽ được báo rõ.</p></div><label class="filter-label">Dòng mỗi trang <select id="ppPageSize" class="form-select form-select-sm"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label></div>
+    <div class="table-responsive mt-3"><table class="table table-dark table-hover align-middle"><thead><tr><th>#</th><th>Game ID</th><th>Team ID</th><th>5 tướng</th><th>Số tướng</th><th>Kết quả</th></tr></thead><tbody id="transactionsBody"><tr><td colspan="6" class="empty-state">Đang tải...</td></tr></tbody></table></div>
+    <div class="d-flex justify-content-between align-items-center"><small id="ppPageInfo" class="text-secondary"></small><div><button id="ppPrev" class="btn btn-sm btn-outline-info me-2">Trước</button><button id="ppNext" class="btn btn-sm btn-outline-info">Tiếp</button></div></div>
+  </section>
 </div>
-
-<!-- Mô tả quy trình -->
-<div class="card card-custom p-4 mb-4">
-    <h5 class="text-info"><i class="fa-solid fa-gears me-2"></i> Quy Trình Chuẩn Hóa Transaction</h5>
-    <ul class="mb-0 mt-2 text-muted">
-        <li>1. Đọc cột <code>hero_ids</code> và dùng <code>json.loads()</code> chuyển chuỗi JSON thành Python List.</li>
-        <li>2. Thêm tiền tố <code>HERO::</code> trước ID từng tướng để phân biệt với kết quả.</li>
-        <li>3. Chuyển đổi cột <code>is_winner</code> thành phần tử <code>RESULT::WIN</code> hoặc <code>RESULT::LOSE</code>.</li>
-        <li>4. Gộp 5 phần tử tướng và 1 phần tử kết quả thành 1 Transaction duy nhất đại diện cho 1 đội trong trận.</li>
-    </ul>
-</div>
-
-<!-- Mẫu dữ liệu đã xử lý -->
-<div class="card card-custom p-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5><i class="fa-solid fa-table-list me-2"></i> Mẫu Kết Quả Transactions Đã Chuẩn Hóa</h5>
-        <span class="badge bg-success">462 Transactions Thành Công</span>
-    </div>
-
-    <div class="table-responsive">
-        <table class="table table-dark table-striped table-hover mb-0">
-            <thead>
-                <tr>
-                    <th>STT</th>
-                    <th>Danh Sách Phần Tử Trong Transaction (Items)</th>
-                    <th>Số Lượng Tướng</th>
-                    <th>Kết Quả Trận</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>1</td>
-                    <td><code>HERO::62b51229...</code>, <code>HERO::4a963a79...</code>, <code>RESULT::LOSE</code></td>
-                    <td><span class="badge bg-secondary">5 Tướng</span></td>
-                    <td><span class="badge bg-danger">LOSE</span></td>
-                </tr>
-                <tr>
-                    <td>2</td>
-                    <td><code>HERO::eee25327...</code>, <code>HERO::9f1f2f8f...</code>, <code>RESULT::WIN</code></td>
-                    <td><span class="badge bg-secondary">5 Tướng</span></td>
-                    <td><span class="badge bg-success">WIN</span></td>
-                </tr>
-                <tr>
-                    <td>3</td>
-                    <td><code>HERO::cdc3ae9d...</code>, <code>HERO::d7f7fe67...</code>, <code>RESULT::WIN</code></td>
-                    <td><span class="badge bg-secondary">5 Tướng</span></td>
-                    <td><span class="badge bg-success">WIN</span></td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
+<script src="{{ url_for('static', filename='js/preprocessing.js') }}"></script>
 {% endblock %}

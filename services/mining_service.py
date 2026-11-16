@@ -1,76 +1,311 @@
+import json
+import math
 import os
-import sys
+
 import pandas as pd
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
-
+from Config import Config
+from services.hero_mapping_service import HeroMappingService
 from src.data.preprocessing import DataPreprocessor
 from src.mining.apriori_miner import AprioriMiner
-from src.mining.fpgrowth_miner import FPGrowthMiner
 from src.mining.comparison import AlgorithmComparer
+from src.mining.fpgrowth_miner import FPGrowthMiner
+
 
 class MiningService:
+    DEFAULTS = {
+        "min_support": Config.MIN_SUPPORT,
+        "min_confidence": Config.MIN_CONFIDENCE,
+        "min_lift": Config.MIN_LIFT,
+    }
+
     def __init__(self):
         self.preprocessor = DataPreprocessor()
+        self.hero_mapper = HeroMappingService()
+        self._results = {}
+        self._comparisons = {}
+
+    @staticmethod
+    def _key(params):
+        return tuple(float(params[key]) for key in ("min_support", "min_confidence", "min_lift"))
+
+    @staticmethod
+    def _validate_params(params):
+        normalized = {}
+        for key in ("min_support", "min_confidence", "min_lift"):
+            try:
+                value = float(params.get(key, MiningService.DEFAULTS[key]))
+            except (TypeError, ValueError):
+                raise ValueError(f"Tham số {key} phải là số.")
+            if not math.isfinite(value):
+                raise ValueError(f"Tham số {key} phải là số hữu hạn.")
+            normalized[key] = value
+        if not 0 <= normalized["min_support"] <= 1:
+            raise ValueError("Minimum Support phải nằm trong khoảng 0 đến 1.")
+        if not 0 <= normalized["min_confidence"] <= 1:
+            raise ValueError("Minimum Confidence phải nằm trong khoảng 0 đến 1.")
+        if normalized["min_lift"] < 0:
+            raise ValueError("Minimum Lift phải lớn hơn hoặc bằng 0.")
+        return normalized
+
+    def _format_itemset(self, values):
+        ordered = sorted(str(value) for value in values)
+        return {
+            "items": ordered,
+            "display_items": self.hero_mapper.display_items(ordered),
+            "label": self.hero_mapper.format_items(ordered),
+        }
+
+    def _serialize_itemsets(self, itemsets, transaction_count):
+        rows = []
+        for _, row in itemsets.iterrows():
+            formatted = self._format_itemset(row["itemsets"])
+            support = float(row["support"])
+            rows.append({
+                **formatted,
+                "size": len(formatted["items"]),
+                "support": support,
+                "count": int(round(support * transaction_count)),
+            })
+        return sorted(rows, key=lambda row: (row["size"], -row["support"], row["label"]))
+
+    def _serialize_rules(self, rules):
+        rows = []
+        for _, row in rules.iterrows():
+            antecedents = self._format_itemset(row["antecedents"])
+            consequents = self._format_itemset(row["consequents"])
+            result = None
+            if set(consequents["items"]) == {"RESULT::WIN"}:
+                result = "WIN"
+            elif set(consequents["items"]) == {"RESULT::LOSE"}:
+                result = "LOSE"
+            rows.append({
+                "antecedents": antecedents["items"],
+                "antecedent_names": antecedents["display_items"],
+                "antecedent_label": antecedents["label"],
+                "consequents": consequents["items"],
+                "consequent_names": consequents["display_items"],
+                "consequent_label": consequents["label"],
+                "result": result,
+                "support": float(row["support"]),
+                "confidence": float(row["confidence"]),
+                "lift": float(row["lift"]),
+            })
+        return sorted(rows, key=lambda row: (-row["confidence"], -row["lift"], -row["support"]))
+
+    def _build_result(self, algorithm, params, transactions, miner, itemsets, rules):
+        win_rules = miner.filter_result_rules(rules, "WIN")
+        lose_rules = miner.filter_result_rules(rules, "LOSE")
+        return {
+            "algorithm": algorithm,
+            "parameters": params,
+            "total_transactions": len(transactions),
+            "execution_time_sec": round(miner.execution_time, 6),
+            "frequent_itemsets_count": len(itemsets),
+            "total_rules_count": len(rules),
+            "win_rules_count": len(win_rules),
+            "lose_rules_count": len(lose_rules),
+            "itemsets": self._serialize_itemsets(itemsets, len(transactions)),
+            "rules": self._serialize_rules(rules),
+            "win_rules": self._serialize_rules(win_rules),
+            "lose_rules": self._serialize_rules(lose_rules),
+        }
+
+    def _run_one(self, algorithm, params, transactions=None):
+        params = self._validate_params(params)
+        transactions = transactions if transactions is not None else self.preprocessor.process_transactions()[0]
+        miner_cls = AprioriMiner if algorithm == "apriori" else FPGrowthMiner
+        miner = miner_cls(**params)
+        itemsets, rules = miner.run_mining(transactions)
+        result = self._build_result(algorithm, params, transactions, miner, itemsets, rules)
+        self._results[(algorithm, self._key(params))] = result
+        return result
 
     def get_dashboard_stats(self):
-        """Lấy các chỉ số thống kê tổng quan cho Dashboard"""
-        try:
-            transactions, df_proc = self.preprocessor.process_transactions()
-            total_transactions = len(transactions)
-            win_count = int(df_proc['is_winner'].sum())
-            lose_count = total_transactions - win_count
-            
-            # Đếm số lượng hero duy nhất xuất hiện
-            all_items = [item for tx in transactions for item in tx if item.startswith("HERO::")]
-            unique_heroes = len(set(all_items))
-
-            return {
-                'total_games': total_transactions // 2,
-                'total_teams': total_transactions,
-                'unique_heroes': unique_heroes,
-                'total_transactions': total_transactions,
-                'win_count': win_count,
-                'lose_count': lose_count
-            }
-        except Exception as e:
-            return {'error': str(e)}
-
-    def run_apriori(self, min_support=0.03, min_confidence=0.5, min_lift=1.0):
-        """Chạy Apriori và định dạng kết quả trả về"""
-        transactions, _ = self.preprocessor.process_transactions()
-        miner = AprioriMiner(min_support=min_support, min_confidence=min_confidence, min_lift=min_lift)
-        itemsets, rules = miner.run_mining(transactions)
-        win_rules = miner.filter_win_rules(rules)
-
+        transactions, processed = self.preprocessor.process_transactions()
+        wins = int(processed["is_winner"].sum()) if not processed.empty else 0
+        heroes = {item[6:] for tx in transactions for item in tx if item.startswith("HERO::")}
+        ids = self.hero_mapper.mapping()
         return {
-            'execution_time': round(miner.execution_time, 4),
-            'itemsets_count': len(itemsets),
-            'rules_count': len(rules),
-            'win_rules_count': len(win_rules),
-            'rules': rules.to_dict(orient='records') if not rules.empty else []
+            "total_games": int(pd.read_csv(Config.RAW_DATA_PATH)["game_id"].nunique()),
+            "total_teams": len(transactions),
+            "unique_heroes": len(heroes),
+            "total_transactions": len(transactions),
+            "win_count": wins,
+            "lose_count": len(transactions) - wins,
+            "unmapped_hero_ids": len(heroes.difference(ids)),
         }
 
-    def run_fpgrowth(self, min_support=0.03, min_confidence=0.5, min_lift=1.0):
-        """Chạy FP-Growth và định dạng kết quả trả về"""
-        transactions, _ = self.preprocessor.process_transactions()
-        miner = FPGrowthMiner(min_support=min_support, min_confidence=min_confidence, min_lift=min_lift)
-        itemsets, rules = miner.run_mining(transactions)
-        win_rules = miner.filter_win_rules(rules)
-
+    def get_preprocessing_data(self, page=1, per_page=25):
+        transactions, processed = self.preprocessor.process_transactions()
+        raw = self.preprocessor.load_raw_data()
+        all_hero_ids = {item[6:] for tx in transactions for item in tx if item.startswith("HERO::")}
+        mapping = self.hero_mapper.mapping()
+        rows = []
+        for idx, tx in enumerate(transactions):
+            heroes = [item for item in tx if item.startswith("HERO::")]
+            result = next(item.split("::", 1)[1] for item in tx if item.startswith("RESULT::"))
+            rows.append({
+                "index": idx + 1,
+                "game_id": str(processed.iloc[idx]["game_id"]),
+                "team_id": str(processed.iloc[idx]["team_id"]),
+                "hero_ids": [item[6:] for item in heroes],
+                "heroes": [self.hero_mapper.display_item(item) for item in heroes],
+                "hero_count": len(heroes),
+                "result": result,
+                "items": tx,
+            })
+        total = len(rows)
+        page = max(1, int(page))
+        per_page = min(100, max(1, int(per_page)))
+        start = (page - 1) * per_page
         return {
-            'execution_time': round(miner.execution_time, 4),
-            'itemsets_count': len(itemsets),
-            'rules_count': len(rules),
-            'win_rules_count': len(win_rules),
-            'rules': rules.to_dict(orient='records') if not rules.empty else []
+            "stats": {
+                "total_transactions": total,
+                "unique_heroes": len(all_hero_ids),
+                "win_count": sum(row["result"] == "WIN" for row in rows),
+                "lose_count": sum(row["result"] == "LOSE" for row in rows),
+                "complete_five_heroes": sum(row["hero_count"] == 5 for row in rows),
+                "unmapped_hero_ids": len(all_hero_ids.difference(mapping)),
+                "source_rows": len(raw),
+            },
+            "steps": [
+                "Đọc association_train.csv (mỗi dòng là một đội).",
+                "Parse hero_ids từ JSON và giữ nguyên UUID gốc.",
+                "Thêm tiền tố HERO:: cho từng tướng.",
+                "Chuyển is_winner thành RESULT::WIN hoặc RESULT::LOSE.",
+                "Tạo đúng một transaction cho mỗi dòng/đội; tên tướng chỉ dùng khi hiển thị.",
+            ],
+            "page": page,
+            "per_page": per_page,
+            "total_pages": max(1, (total + per_page - 1) // per_page),
+            "rows": rows[start:start + per_page],
         }
 
-    def run_comparison(self, min_support=0.03, min_confidence=0.5, min_lift=1.0):
-        """Chạy so sánh 2 thuật toán"""
-        transactions, _ = self.preprocessor.process_transactions()
-        comparer = AlgorithmComparer(min_support=min_support, min_confidence=min_confidence, min_lift=min_lift)
-        result_dict, _ = comparer.compare(transactions)
-        return result_dict
+    def run_algorithm(self, algorithm, params):
+        if algorithm not in {"apriori", "fpgrowth"}:
+            raise ValueError("Thuật toán không hợp lệ.")
+        params = self._validate_params(params)
+        return self._run_one(algorithm, params)
+
+    def run_comparison(self, params):
+        params = self._validate_params(params)
+        key = self._key(params)
+        transactions = self.preprocessor.process_transactions()[0]
+        comparer = AlgorithmComparer(**params)
+        comparison, _, runs = comparer.compare(transactions, include_details=True)
+        for algorithm, run in runs.items():
+            result = self._build_result(
+                algorithm, params, transactions, run["miner"], run["itemsets"], run["rules"]
+            )
+            self._results[(algorithm, key)] = result
+        comparison = {
+            "parameters": comparison["parameters"],
+            "apriori": comparison["apriori"],
+            "fpgrowth": comparison["fpgrowth"],
+        }
+        self._comparisons[key] = comparison
+        return comparison
+
+    def get_association_overview(self, params):
+        self.run_comparison(params)
+        key = self._key(self._validate_params(params))
+        ap = self._results[("apriori", key)]
+        fp = self._results[("fpgrowth", key)]
+        rules = [{**row, "algorithm": "Apriori"} for row in ap["rules"]]
+        rules += [{**row, "algorithm": "FP-Growth"} for row in fp["rules"]]
+        return {
+            "apriori_rules_count": ap["total_rules_count"],
+            "fpgrowth_rules_count": fp["total_rules_count"],
+            "win_rules_count": ap["win_rules_count"] + fp["win_rules_count"],
+            "lose_rules_count": ap["lose_rules_count"] + fp["lose_rules_count"],
+            "highest_confidence": max(rules, key=lambda x: x["confidence"], default=None),
+            "highest_lift": max(rules, key=lambda x: x["lift"], default=None),
+            "rules": sorted(rules, key=lambda row: (-row["confidence"], -row["lift"])),
+        }
+
+    def get_data_management(self):
+        datasets = []
+        paths = [Config.RAW_DATA_PATH, Config.PROCESSED_DATA_PATH, self.hero_mapper.heroes_path]
+        for path in paths:
+            if not os.path.isfile(path):
+                datasets.append({"name": os.path.basename(path), "path": os.path.relpath(path, Config.BASE_DIR), "exists": False})
+                continue
+            df = pd.read_csv(path)
+            valid = bool(not df.empty and not df.isna().any().any())
+            validation_message = "Không có ô thiếu giá trị." if valid else "File rỗng hoặc còn giá trị thiếu."
+            if path == Config.RAW_DATA_PATH:
+                required = {"game_id", "team_id", "hero_ids", "is_winner"}
+                valid = valid and required.issubset(df.columns)
+                if valid:
+                    try:
+                        for idx, row in df.iterrows():
+                            heroes = row["hero_ids"]
+                            heroes = json.loads(heroes) if isinstance(heroes, str) else heroes
+                            if not isinstance(heroes, list) or len(heroes) != 5:
+                                raise ValueError(f"Dòng {idx + 2} không có đúng 5 tướng.")
+                            self.preprocessor._parse_winner(row["is_winner"], idx + 2)
+                        validation_message = "Schema hợp lệ; hero_ids là JSON gồm 5 tướng và is_winner có giá trị hợp lệ."
+                    except (ValueError, TypeError) as exc:
+                        valid = False
+                        validation_message = str(exc)
+                else:
+                    validation_message = "Thiếu một hoặc nhiều cột bắt buộc cho mining."
+            elif path == Config.PROCESSED_DATA_PATH:
+                required = {"game_id", "team_id", "is_winner", "hero_count", "items_str"}
+                valid = valid and required.issubset(df.columns)
+                if valid:
+                    valid = bool((df["hero_count"] == 5).all())
+                validation_message = "Schema hợp lệ, tất cả transaction có đúng 5 tướng." if valid else "Schema không hợp lệ hoặc có transaction thiếu/khác 5 tướng."
+            elif path == self.hero_mapper.heroes_path:
+                valid = valid and {"hero_id", "name"}.issubset(df.columns)
+                validation_message = "Có cột hero_id và name, không thiếu giá trị." if valid else "Thiếu cột ánh xạ hoặc có giá trị thiếu."
+            datasets.append({
+                "name": os.path.basename(path),
+                "path": os.path.relpath(path, Config.BASE_DIR),
+                "exists": True,
+                "rows": int(len(df)),
+                "columns_count": int(len(df.columns)),
+                "columns": [{"name": str(col), "dtype": str(df[col].dtype), "missing": int(df[col].isna().sum())} for col in df.columns],
+                "missing_total": int(df.isna().sum().sum()),
+                "valid": valid,
+                "validation_message": validation_message,
+            })
+        return {"datasets": datasets}
+
+    def get_cached_result(self, algorithm, params):
+        params = self._validate_params(params)
+        return self._results.get((algorithm, self._key(params)))
+
+    def get_cached_comparison(self, params):
+        params = self._validate_params(params)
+        return self._comparisons.get(self._key(params))
+
+    def export_frame(self, report_type, params):
+        params = self._validate_params(params)
+        if report_type == "comparison":
+            comparison = self.get_cached_comparison(params)
+            if comparison is None:
+                raise LookupError("Chưa chạy so sánh với bộ tham số này.")
+            return pd.DataFrame([
+                {"algorithm": name, **values}
+                for name, values in (("Apriori", comparison["apriori"]), ("FP-Growth", comparison["fpgrowth"]))
+            ])
+        algorithm, kind = report_type.split("_", 1)
+        result = self.get_cached_result(algorithm, params)
+        if result is None:
+            raise LookupError("Chưa chạy thuật toán với bộ tham số này.")
+        if kind == "itemsets":
+            rows = [{
+                "items": row["label"], "item_uuids": " | ".join(row["items"]),
+                "item_count": row["size"], "support": row["support"], "transaction_count": row["count"],
+            } for row in result["itemsets"]]
+        elif kind == "rules":
+            rows = [{
+                "antecedents": row["antecedent_label"], "antecedent_uuids": " | ".join(row["antecedents"]),
+                "consequents": row["consequent_label"], "consequent_uuids": " | ".join(row["consequents"]),
+                "result": row["result"], "support": row["support"], "confidence": row["confidence"], "lift": row["lift"],
+            } for row in result["rules"]]
+        else:
+            raise ValueError("Loại báo cáo không hợp lệ.")
+        return pd.DataFrame(rows)

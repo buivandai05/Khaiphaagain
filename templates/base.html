@@ -1,39 +1,27 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}AoG Analytics{% endblock %}</title>
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- FontAwesome Icons -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}AoG Analytics{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <h4><i class="fa-solid fa-gamepad"></i> AoG ANALYTICS</h4>
-        <a href="/" class="{% if request.path == '/' %}active{% endif %}"><i class="fa-solid fa-chart-line me-2"></i> Dashboard</a>
-        <a href="/data-management" class="{% if request.path == '/data-management' %}active{% endif %}"><i class="fa-solid fa-database me-2"></i> Data Management</a>
-        <a href="/preprocessing" class="{% if request.path == '/preprocessing' %}active{% endif %}"><i class="fa-solid fa-filter me-2"></i> Preprocessing</a>
-        <a href="/apriori" class="{% if request.path == '/apriori' %}active{% endif %}"><i class="fa-solid fa-diagram-project me-2"></i> Apriori Mining</a>
-        <a href="/fpgrowth" class="{% if request.path == '/fpgrowth' %}active{% endif %}"><i class="fa-solid fa-tree me-2"></i> FP-Growth</a>
-        <a href="/association-rules" class="{% if request.path == '/association-rules' %}active{% endif %}"><i class="fa-solid fa-link me-2"></i> Association Rules</a>
-        <a href="/comparison" class="{% if request.path == '/comparison' %}active{% endif %}"><i class="fa-solid fa-code-compare me-2"></i> Comparison</a>
-        <a href="/reports" class="{% if request.path == '/reports' %}active{% endif %}"><i class="fa-solid fa-file-export me-2"></i> Reports</a>
-    </div>
-
-    <!-- Main Content -->
-    <div class="main-content">
-        {% block content %}{% endblock %}
-    </div>
-
-    <!-- Bootstrap & Chart.js JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    {% block scripts %}{% endblock %}
+  <aside class="sidebar">
+    <h4><i class="fa-solid fa-gamepad"></i> AoG ANALYTICS</h4>
+    <a href="{{ url_for('main.dashboard') }}" class="{% if request.path == '/' %}active{% endif %}"><i class="fa-solid fa-chart-line me-2"></i>Dashboard</a>
+    <a href="{{ url_for('main.data_management') }}" class="{% if request.path == '/data-management' %}active{% endif %}"><i class="fa-solid fa-database me-2"></i>Data Management</a>
+    <a href="{{ url_for('main.preprocessing') }}" class="{% if request.path == '/preprocessing' %}active{% endif %}"><i class="fa-solid fa-filter me-2"></i>Preprocessing</a>
+    <a href="{{ url_for('main.apriori_page') }}" class="{% if request.path == '/apriori' %}active{% endif %}"><i class="fa-solid fa-diagram-project me-2"></i>Apriori Mining</a>
+    <a href="{{ url_for('main.fpgrowth_page') }}" class="{% if request.path == '/fpgrowth' %}active{% endif %}"><i class="fa-solid fa-tree me-2"></i>FP-Growth</a>
+    <a href="{{ url_for('main.association_rules_page') }}" class="{% if request.path == '/association-rules' %}active{% endif %}"><i class="fa-solid fa-link me-2"></i>Association Rules</a>
+    <a href="{{ url_for('main.comparison_page') }}" class="{% if request.path == '/comparison' %}active{% endif %}"><i class="fa-solid fa-code-compare me-2"></i>Comparison</a>
+    <a href="{{ url_for('main.reports_page') }}" class="{% if request.path == '/reports' %}active{% endif %}"><i class="fa-solid fa-file-export me-2"></i>Reports</a>
+  </aside>
+  <main class="main-content">{% block content %}{% endblock %}</main>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

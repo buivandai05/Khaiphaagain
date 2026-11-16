@@ -1,16 +1,9 @@
-import os
-import sys
 import time
+
 import pandas as pd
-from mlxtend.preprocessing import TransactionEncoder
 from mlxtend.frequent_patterns import apriori, association_rules
+from mlxtend.preprocessing import TransactionEncoder
 
-# Thêm thư mục gốc vào sys.path
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
-
-from src.data.preprocessing import DataPreprocessor
 
 class AprioriMiner:
     def __init__(self, min_support=0.03, min_confidence=0.5, min_lift=1.0):
@@ -19,81 +12,33 @@ class AprioriMiner:
         self.min_lift = min_lift
         self.execution_time = 0.0
 
-    def encode_transactions(self, transactions):
-        """Chuyển danh sách transactions thành bảng One-Hot (True/False)"""
-        te = TransactionEncoder()
-        te_ary = te.fit(transactions).transform(transactions)
-        df_encoded = pd.DataFrame(te_ary, columns=te.columns_)
-        return df_encoded
+    @staticmethod
+    def encode_transactions(transactions):
+        encoder = TransactionEncoder()
+        encoded = encoder.fit(transactions).transform(transactions)
+        return pd.DataFrame(encoded, columns=encoder.columns_)
 
     def run_mining(self, transactions):
-        """
-        Chạy thuật toán Apriori và khai phá luật kết hợp:
-        - Đo thời gian thực thi.
-        - Tìm frequent itemsets.
-        - Tạo association rules.
-        """
-        start_time = time.time()
+        started = time.perf_counter()
+        encoded = self.encode_transactions(transactions)
+        itemsets = apriori(encoded, min_support=self.min_support, use_colnames=True)
+        rules = pd.DataFrame()
+        if not itemsets.empty:
+            rules = association_rules(itemsets, metric="confidence", min_threshold=self.min_confidence)
+            if self.min_lift > 0 and not rules.empty:
+                rules = rules[rules["lift"] >= self.min_lift].copy()
+        self.execution_time = time.perf_counter() - started
+        return itemsets, rules
 
-        # 1. Mã hóa dữ liệu thành mảng One-Hot
-        df_encoded = self.encode_transactions(transactions)
-
-        # 2. Chạy thuật toán Apriori
-        frequent_itemsets = apriori(
-            df_encoded, 
-            min_support=self.min_support, 
-            use_colnames=True
-        )
-
-        self.execution_time = time.time() - start_time
-
-        if frequent_itemsets.empty:
-            print("⚠️ Không tìm thấy tập phổ biến nào với ngưỡng Support đã cho.")
-            return frequent_itemsets, pd.DataFrame()
-
-        # 3. Tạo Association Rules
-        rules = association_rules(
-            frequent_itemsets, 
-            metric="confidence", 
-            min_threshold=self.min_confidence
-        )
-
-        # Lọc luật theo min_lift
-        if not rules.empty and self.min_lift > 0:
-            rules = rules[rules['lift'] >= self.min_lift]
-
-        print(f"✅ Apriori chạy xong trong: {self.execution_time:.4f} giây")
-        print(f"📊 Tìm thấy {len(frequent_itemsets)} tập phổ biến và {len(rules)} luật kết hợp.")
-
-        return frequent_itemsets, rules
+    @staticmethod
+    def filter_result_rules(rules, result):
+        if rules.empty:
+            return pd.DataFrame(columns=rules.columns)
+        target = f"RESULT::{result}"
+        return rules[
+            rules["antecedents"].apply(lambda values: bool(values) and all(str(x).startswith("HERO::") for x in values))
+            & rules["consequents"].apply(lambda values: set(values) == {target})
+        ].copy()
 
     def filter_win_rules(self, rules):
-        """Lọc các luật có vế sau (consequents) dẫn tới RESULT::WIN"""
-        if rules.empty:
-            return pd.DataFrame()
-
-        def is_win_rule(consequents):
-            return "RESULT::WIN" in consequents
-
-        win_rules = rules[rules['consequents'].apply(is_win_rule)].copy()
-        return win_rules
-
-if __name__ == '__main__':
-    # Đọc dữ liệu đã tiền xử lý
-    preprocessor = DataPreprocessor()
-    transactions, _ = preprocessor.process_transactions()
-
-    # Thử nghiệm khai phá với min_support=0.03, min_confidence=0.5
-    miner = AprioriMiner(min_support=0.03, min_confidence=0.5, min_lift=1.0)
-    itemsets, rules = miner.run_mining(transactions)
-
-    # In mẫu kết quả tập phổ biến
-    print("\n📝 Mẫu 5 Tập Phổ Biến Đầu Tiên:")
-    if not itemsets.empty:
-        print(itemsets.head().to_string())
-
-    # In mẫu các luật dẫn tới chiến thắng
-    win_rules = miner.filter_win_rules(rules)
-    print(f"\n🏆 Mẫu 5 Luật Dẫn Đến CHIẾN THẮNG (RESULT::WIN) [Tổng số luật: {len(win_rules)}]:")
-    if not win_rules.empty:
-        print(win_rules[['antecedents', 'consequents', 'support', 'confidence', 'lift']].head().to_string())
+        return self.filter_result_rules(rules, "WIN")
