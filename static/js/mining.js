@@ -9,12 +9,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const td = row.insertCell(); td.textContent = value; if (className) td.className = className; return td;
   };
   const pct = value => `${(Number(value) * 100).toFixed(2)}%`;
-  const params = () => ({min_support: $('minSup').value, min_confidence: $('minConf').value, min_lift: $('minLift').value});
+  const params = () => ({min_support: $('minSup').value, min_confidence: $('minConf').value, min_lift: $('minLift').value, max_heroes: $('maxHeroes').value});
   function validate() {
     const p = params();
     if (p.min_support === '' || Number(p.min_support) < 0 || Number(p.min_support) > 1 ||
         p.min_confidence === '' || Number(p.min_confidence) < 0 || Number(p.min_confidence) > 1 ||
-        p.min_lift === '' || Number(p.min_lift) < 0 || Object.values(p).some(v => !Number.isFinite(Number(v)))) {
+        p.min_lift === '' || Number(p.min_lift) < 0 || Number(p.max_heroes) < 2 || Number(p.max_heroes) > 5 || !Number.isInteger(Number(p.max_heroes)) || Object.values(p).some(v => !Number.isFinite(Number(v)))) {
       $('pageError').textContent = 'Support và Confidence phải trong khoảng 0–1; Lift phải từ 0 trở lên.';
       $('pageError').classList.remove('d-none'); return false;
     }

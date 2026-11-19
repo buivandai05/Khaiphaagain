@@ -7,16 +7,18 @@ from src.mining.fpgrowth_miner import FPGrowthMiner
 class AlgorithmComparer:
     """Run both miners with the same dataset and thresholds."""
 
-    def __init__(self, min_support=0.03, min_confidence=0.5, min_lift=1.0):
+    def __init__(self, min_support=0.03, min_confidence=0.5, min_lift=1.0, max_heroes=5):
         self.min_support = min_support
         self.min_confidence = min_confidence
         self.min_lift = min_lift
+        self.max_heroes = max_heroes
 
     def compare(self, transactions, include_details=False):
         params = {
             "min_support": self.min_support,
             "min_confidence": self.min_confidence,
             "min_lift": self.min_lift,
+            "max_heroes": self.max_heroes,
         }
         runs = {}
         for name, miner_type in (("apriori", AprioriMiner), ("fpgrowth", FPGrowthMiner)):

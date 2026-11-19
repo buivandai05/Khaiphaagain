@@ -6,10 +6,11 @@ from mlxtend.preprocessing import TransactionEncoder
 
 
 class AprioriMiner:
-    def __init__(self, min_support=0.03, min_confidence=0.5, min_lift=1.0):
+    def __init__(self, min_support=0.03, min_confidence=0.5, min_lift=1.0, max_heroes=5):
         self.min_support = min_support
         self.min_confidence = min_confidence
         self.min_lift = min_lift
+        self.max_heroes = max_heroes
         self.execution_time = 0.0
 
     @staticmethod
@@ -21,7 +22,11 @@ class AprioriMiner:
     def run_mining(self, transactions):
         started = time.perf_counter()
         encoded = self.encode_transactions(transactions)
-        itemsets = apriori(encoded, min_support=self.min_support, use_colnames=True)
+        itemsets = apriori(encoded, min_support=self.min_support, use_colnames=True, max_len=self.max_heroes + 1)
+        itemsets = itemsets[itemsets["itemsets"].apply(
+            lambda values: sum(str(value).startswith("HERO::") for value in values) <= self.max_heroes
+            and sum(str(value).startswith("RESULT::") for value in values) <= 1
+        )].copy()
         rules = pd.DataFrame()
         if not itemsets.empty:
             rules = association_rules(itemsets, metric="confidence", min_threshold=self.min_confidence)
@@ -37,6 +42,7 @@ class AprioriMiner:
         target = f"RESULT::{result}"
         return rules[
             rules["antecedents"].apply(lambda values: bool(values) and all(str(x).startswith("HERO::") for x in values))
+            & rules["antecedents"].apply(lambda values: 2 <= len(values) <= 5)
             & rules["consequents"].apply(lambda values: set(values) == {target})
         ].copy()
 

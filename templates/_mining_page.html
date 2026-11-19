@@ -1,23 +1,27 @@
 <section class="card card-custom p-4 mb-4">
   <h5 class="mb-2">Ngưỡng khai phá</h5>
-  <p class="text-secondary">Ngưỡng mặc định lấy từ backend. Các thuật toán dùng chung định nghĩa Support trên toàn bộ transaction.</p>
   <div class="row g-3 align-items-end">
-    <div class="col-lg-3 col-md-4">
+    <div class="col-lg-2 col-md-6">
       <label for="minSup" class="form-label">Minimum Support (0–1)</label>
       <input type="number" id="minSup" class="form-control" min="0" max="1" step="0.01" value="{{ defaults.min_support }}">
       <div class="form-text">Tỷ lệ transaction cần chứa itemset. Support = số transaction chứa X / tổng transaction. Ví dụ: 462 transaction, ngưỡng 0.03 cần ít nhất 14 lần xuất hiện.</div>
     </div>
-    <div class="col-lg-3 col-md-4">
+    <div class="col-lg-2 col-md-6">
       <label for="minConf" class="form-label">Minimum Confidence (0–1)</label>
       <input type="number" id="minConf" class="form-control" min="0" max="1" step="0.05" value="{{ defaults.min_confidence }}">
       <div class="form-text">Tỷ lệ xuất hiện vế sau khi đã có vế trước: Support(A ∪ B) / Support(A). Ví dụ minh họa, không phải kết quả: 17/20 transaction có combo Aya + Taara thắng → 85%.</div>
     </div>
-    <div class="col-lg-3 col-md-4">
+    <div class="col-lg-2 col-md-6">
       <label for="minLift" class="form-label">Minimum Lift (≥ 0)</label>
       <input type="number" id="minLift" class="form-control" min="0" step="0.1" value="{{ defaults.min_lift }}">
       <div class="form-text">Lift = Confidence / Support(B). Trên 1: liên hệ thuận; bằng 1: độc lập theo độ đo này; dưới 1: liên hệ nghịch.</div>
     </div>
-    <div class="col-lg-3 col-md-12">
+    <div class="col-lg-2 col-md-6">
+      <label for="maxHeroes" class="form-label">Số tướng tối đa</label>
+      <input type="number" id="maxHeroes" class="form-control" min="2" max="5" step="1" value="{{ defaults.max_heroes }}">
+      <div class="form-text">Tối đa 5 tướng trong một đội hình.</div>
+    </div>
+    <div class="col-lg-4 col-md-12">
       <button class="btn btn-info w-100" id="runMining"><i class="fa-solid fa-play me-2"></i>Chạy {{ algorithm_label }}</button>
     </div>
   </div>
@@ -25,7 +29,7 @@
   <div class="text-info mt-3 d-none" id="pageLoading"><i class="fa-solid fa-spinner fa-spin me-2"></i>Đang khai phá dữ liệu...</div>
 </section>
 
-<div id="miningResults" class="d-none" data-algorithm="{{ algorithm }}">
+<div id="miningResults" data-algorithm="{{ algorithm }}">
   <div class="row g-3 mb-4">
     <div class="col-md"><div class="stat-card"><div class="stat-label">Thời gian khai phá</div><div class="number" id="statTime">—</div><small class="text-secondary">Thời gian chạy thuật toán và sinh luật.</small></div></div>
     <div class="col-md"><div class="stat-card"><div class="stat-label">Frequent itemsets</div><div class="number" id="statItemsets">—</div><small class="text-secondary">Các tập đạt Minimum Support.</small></div></div>
@@ -33,6 +37,8 @@
     <div class="col-md"><div class="stat-card"><div class="stat-label">Luật hướng WIN</div><div class="number text-success" id="statWin">—</div><small class="text-secondary">Vế sau chính xác là RESULT::WIN.</small></div></div>
     <div class="col-md"><div class="stat-card"><div class="stat-label">Luật hướng LOSE</div><div class="number text-danger" id="statLose">—</div><small class="text-secondary">Vế sau chính xác là RESULT::LOSE.</small></div></div>
   </div>
+
+  {% include '_team_compositions.html' %}
 
   <section class="card card-custom p-4 mb-4">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><div><h5>Frequent itemsets</h5><p class="text-secondary mb-0">UUID giữ trong backend; tên tướng chỉ được thay ở lớp hiển thị.</p></div>

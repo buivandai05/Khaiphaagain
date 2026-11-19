@@ -1,6 +1,7 @@
 import json
 import math
 import os
+from itertools import combinations
 
 import pandas as pd
 
@@ -17,6 +18,7 @@ class MiningService:
         "min_support": Config.MIN_SUPPORT,
         "min_confidence": Config.MIN_CONFIDENCE,
         "min_lift": Config.MIN_LIFT,
+        "max_heroes": 5,
     }
 
     def __init__(self):
@@ -27,7 +29,10 @@ class MiningService:
 
     @staticmethod
     def _key(params):
-        return tuple(float(params[key]) for key in ("min_support", "min_confidence", "min_lift"))
+        return (
+            tuple(float(params[key]) for key in ("min_support", "min_confidence", "min_lift"))
+            + (int(params["max_heroes"]),)
+        )
 
     @staticmethod
     def _validate_params(params):
@@ -40,6 +45,12 @@ class MiningService:
             if not math.isfinite(value):
                 raise ValueError(f"Tham số {key} phải là số hữu hạn.")
             normalized[key] = value
+        try:
+            normalized["max_heroes"] = int(params.get("max_heroes", MiningService.DEFAULTS["max_heroes"]))
+        except (TypeError, ValueError):
+            raise ValueError("Maximum hero count must be a whole number from 2 to 5.")
+        if normalized["max_heroes"] < 2 or normalized["max_heroes"] > 5:
+            raise ValueError("Maximum hero count must be between 2 and 5.")
         if not 0 <= normalized["min_support"] <= 1:
             raise ValueError("Minimum Support phải nằm trong khoảng 0 đến 1.")
         if not 0 <= normalized["min_confidence"] <= 1:
@@ -194,6 +205,34 @@ class MiningService:
         transactions = self.preprocessor.process_transactions()[0]
         comparer = AlgorithmComparer(**params)
         comparison, _, runs = comparer.compare(transactions, include_details=True)
+        composition_sets = {}
+        for algorithm, run in runs.items():
+            plain, wins = set(), set()
+            for itemset in run["itemsets"]["itemsets"]:
+                values = set(itemset)
+                heroes = {value for value in values if str(value).startswith("HERO::")}
+                result_tags = {value for value in values if str(value).startswith("RESULT::")}
+                if 2 <= len(heroes) <= params["max_heroes"]:
+                    if not result_tags:
+                        plain.add(tuple(sorted(heroes)))
+                    elif result_tags == {"RESULT::WIN"}:
+                        wins.add(tuple(sorted(heroes)))
+            composition_sets[algorithm] = plain
+            comparison[algorithm]["team_compositions_count"] = len(plain)
+            comparison[algorithm]["winning_team_compositions_count"] = len(wins)
+        common = composition_sets["apriori"] & composition_sets["fpgrowth"]
+        only_apriori = composition_sets["apriori"] - composition_sets["fpgrowth"]
+        only_fpgrowth = composition_sets["fpgrowth"] - composition_sets["apriori"]
+        def describe_combinations(values):
+            return sorted(({
+                "hero_ids": list(combo),
+                "label": self.hero_mapper.format_items([f"HERO::{hero}" for hero in combo]),
+            } for combo in values), key=lambda row: row["label"])
+        comparison["composition_overlap"] = {
+            "common": describe_combinations(common),
+            "apriori_only": describe_combinations(only_apriori),
+            "fpgrowth_only": describe_combinations(only_fpgrowth),
+        }
         for algorithm, run in runs.items():
             result = self._build_result(
                 algorithm, params, transactions, run["miner"], run["itemsets"], run["rules"]
@@ -203,9 +242,109 @@ class MiningService:
             "parameters": comparison["parameters"],
             "apriori": comparison["apriori"],
             "fpgrowth": comparison["fpgrowth"],
+            "composition_overlap": comparison["composition_overlap"],
         }
         self._comparisons[key] = comparison
         return comparison
+
+    def get_team_compositions(self, size=None, sort="win_rate", min_matches=5, selected_heroes=None):
+        """Summarize observed hero combinations by team-side match transactions."""
+        transactions, processed = self.preprocessor.process_transactions()
+        mapping = self.hero_mapper.mapping()
+        catalog_ids = sorted({item[6:] for tx in transactions for item in tx if item.startswith("HERO::")})
+        catalog = [{"id": hero_id, "name": mapping.get(hero_id, f"Unknown hero ({hero_id})")} for hero_id in catalog_ids]
+        try:
+            min_matches = max(1, int(min_matches))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Minimum matches must be a whole number greater than zero.") from exc
+        try:
+            size = int(size) if size not in (None, "", "all") else None
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Team size must be between 2 and 5.") from exc
+        if size is not None and size not in range(2, 6):
+            raise ValueError("Team size must be between 2 and 5.")
+        if sort not in {"win_rate", "matches"}:
+            raise ValueError("Sort must be win_rate or matches.")
+
+        selected = list(dict.fromkeys(str(hero) for hero in (selected_heroes or []) if str(hero)))
+        if len(selected) != len(selected_heroes or []) or len(selected) > 5 or len(selected) == 1:
+            raise ValueError("Select between two and five distinct heroes.")
+        valid_ids = set(catalog_ids)
+        if any(hero not in valid_ids for hero in selected):
+            raise ValueError("The selected hero is not present in the dataset.")
+
+        counts = {}
+        outcomes = {}
+        for tx, (_, row) in zip(transactions, processed.iterrows()):
+            hero_ids = sorted(item[6:] for item in tx if item.startswith("HERO::"))
+            for combo_size in range(2, min(5, len(hero_ids)) + 1):
+                for combo in combinations(hero_ids, combo_size):
+                    counts[combo] = counts.get(combo, 0) + 1
+                    if row["is_winner"]:
+                        outcomes[combo] = outcomes.get(combo, 0) + 1
+
+        total = len(transactions)
+        overall_win_rate = float(processed["is_winner"].mean()) if total else 0
+        rows = []
+        for combo, matches in counts.items():
+            if size is not None and len(combo) != size:
+                continue
+            if selected and tuple(sorted(selected)) != combo:
+                continue
+            if matches < min_matches:
+                continue
+            wins = outcomes.get(combo, 0)
+            win_rate = wins / matches
+            support = matches / total if total else 0
+            rows.append({
+                "hero_ids": list(combo),
+                "heroes": [mapping.get(hero, f"Unknown hero ({hero})") for hero in combo],
+                "label": " + ".join(mapping.get(hero, f"Unknown hero ({hero})") for hero in combo),
+                "size": len(combo), "matches": matches, "wins": wins, "losses": matches - wins,
+                "win_rate": win_rate, "support": support, "confidence": win_rate,
+                "lift": (win_rate / overall_win_rate) if overall_win_rate else 0,
+                "ranking_score": self._wilson_lower_bound(wins, matches),
+                "rating": "insufficient" if matches < max(10, min_matches) else ("high" if win_rate >= overall_win_rate else "potential"),
+            })
+        if sort == "matches":
+            rows.sort(key=lambda row: (-row["matches"], -row["win_rate"], row["label"]))
+        else:
+            rows.sort(key=lambda row: (-row["ranking_score"], -row["win_rate"], row["label"]))
+        return {
+            "total_transactions": total, "overall_win_rate": overall_win_rate,
+            "catalog": catalog, "compositions": rows[:100],
+            "selected": self._lookup_selected(selected, counts, outcomes, total, overall_win_rate, mapping, min_matches)
+                if selected else None,
+        }
+
+    @staticmethod
+    def _wilson_lower_bound(wins, matches, z=1.96):
+        if matches <= 0:
+            return 0.0
+        rate = wins / matches
+        z_squared = z * z
+        denominator = 1 + z_squared / matches
+        center = rate + z_squared / (2 * matches)
+        margin = z * math.sqrt((rate * (1 - rate) + z_squared / (4 * matches)) / matches)
+        return (center - margin) / denominator
+
+    @staticmethod
+    def _lookup_selected(selected, counts, outcomes, total, overall_win_rate, mapping, min_matches):
+        combo = tuple(sorted(selected))
+        matches = counts.get(combo, 0)
+        wins = outcomes.get(combo, 0)
+        if not matches:
+            return {"found": False, "hero_ids": list(combo), "heroes": [mapping.get(h, h) for h in combo], "label": " + ".join(mapping.get(h, h) for h in combo)}
+        win_rate = wins / matches
+        return {
+            "found": True, "hero_ids": list(combo), "heroes": [mapping.get(h, h) for h in combo],
+            "label": " + ".join(mapping.get(h, h) for h in combo), "matches": matches, "wins": wins,
+            "losses": matches - wins, "win_rate": win_rate, "support": matches / total if total else 0,
+            "confidence": win_rate, "lift": win_rate / overall_win_rate if overall_win_rate else 0,
+            "ranking_score": MiningService._wilson_lower_bound(wins, matches),
+            "rating": "insufficient" if matches < max(10, min_matches) else ("high" if win_rate >= overall_win_rate else "potential"),
+            "min_matches": min_matches,
+        }
 
     def get_association_overview(self, params):
         self.run_comparison(params)

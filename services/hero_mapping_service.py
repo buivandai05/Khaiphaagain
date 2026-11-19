@@ -27,6 +27,10 @@ class HeroMappingService:
         return self._mapping
 
     def display_item(self, item):
+        if str(item) == "RESULT::WIN":
+            return "Kết quả: Thắng"
+        if str(item) == "RESULT::LOSE":
+            return "Kết quả: Thua"
         if not str(item).startswith("HERO::"):
             return str(item)
         hero_id = str(item)[6:]

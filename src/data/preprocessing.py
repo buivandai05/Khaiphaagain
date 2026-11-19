@@ -17,7 +17,7 @@ class DataPreprocessor:
         if not os.path.isfile(self.raw_data_path):
             raise FileNotFoundError(f"Không tìm thấy dataset: {self.raw_data_path}")
         df = pd.read_csv(self.raw_data_path)
-        required = {"hero_ids", "is_winner"}
+        required = {"game_id", "team_id", "hero_ids", "is_winner"}
         missing = required.difference(df.columns)
         if missing:
             raise ValueError(f"Dataset thiếu cột bắt buộc: {', '.join(sorted(missing))}")
@@ -48,6 +48,8 @@ class DataPreprocessor:
                 raise ValueError(f"hero_ids không phải JSON hợp lệ ở dòng {row_number}") from exc
             if not isinstance(hero_ids, list) or any(not isinstance(hero, str) or not hero.strip() for hero in hero_ids):
                 raise ValueError(f"hero_ids phải là danh sách UUID dạng chuỗi ở dòng {row_number}")
+            if len(hero_ids) != 5 or len(set(hero.strip() for hero in hero_ids)) != 5:
+                raise ValueError(f"Each team row must contain exactly five distinct heroes (row {row_number}).")
             # Keep the source UUIDs unchanged for both mining algorithms.
             hero_items = [f"HERO::{hero.strip()}" for hero in hero_ids]
             is_win = self._parse_winner(row["is_winner"], row_number)
@@ -62,6 +64,14 @@ class DataPreprocessor:
                 "items_str": ",".join(transaction),
             })
 
+        team_rows = pd.DataFrame(processed_rows)
+        if team_rows["game_id"].isna().any() or team_rows["team_id"].isna().any():
+            raise ValueError("game_id and team_id must not be empty.")
+        for game_id, game_rows in team_rows.groupby("game_id", sort=False):
+            if game_rows["team_id"].nunique() != 2 or len(game_rows) != 2:
+                raise ValueError(f"Game {game_id!r} must have exactly one transaction for each of its two teams.")
+            if int(game_rows["is_winner"].sum()) != 1:
+                raise ValueError(f"Game {game_id!r} must have exactly one winning team.")
         processed_df = pd.DataFrame(processed_rows)
         output_dir = os.path.dirname(self.processed_data_path)
         if output_dir:

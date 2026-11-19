@@ -114,6 +114,20 @@ def api_association_rules():
         return jsonify({"error": f"Không thể tổng hợp luật: {exc}"}), 500
 
 
+@main_bp.route("/api/team-compositions")
+def api_team_compositions():
+    try:
+        selected = [hero for hero in request.args.get("heroes", "").split(",") if hero]
+        return jsonify(mining_service.get_team_compositions(
+            size=request.args.get("size"), sort=request.args.get("sort", "win_rate"),
+            min_matches=request.args.get("min_matches", 5), selected_heroes=selected,
+        ))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": f"Team analysis failed: {exc}"}), 500
+
+
 @main_bp.route("/api/reports/<report_type>.csv")
 def api_report(report_type):
     params = {key: request.args.get(key, value) for key, value in mining_service.DEFAULTS.items()}
