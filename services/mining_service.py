@@ -351,13 +351,18 @@ class MiningService:
         key = self._key(self._validate_params(params))
         ap = self._results[("apriori", key)]
         fp = self._results[("fpgrowth", key)]
-        rules = [{**row, "algorithm": "Apriori"} for row in ap["rules"]]
-        rules += [{**row, "algorithm": "FP-Growth"} for row in fp["rules"]]
+        # This page is specifically about hero combinations associated with a
+        # match result. Keep generic rules (including one hero -> result) on
+        # the algorithm detail pages, and show only 2-5 heroes -> WIN/LOSE here.
+        apriori_result_rules = ap["win_rules"] + ap["lose_rules"]
+        fpgrowth_result_rules = fp["win_rules"] + fp["lose_rules"]
+        rules = [{**row, "algorithm": "Apriori"} for row in apriori_result_rules]
+        rules += [{**row, "algorithm": "FP-Growth"} for row in fpgrowth_result_rules]
         return {
-            "apriori_rules_count": ap["total_rules_count"],
-            "fpgrowth_rules_count": fp["total_rules_count"],
-            "win_rules_count": ap["win_rules_count"] + fp["win_rules_count"],
-            "lose_rules_count": ap["lose_rules_count"] + fp["lose_rules_count"],
+            "apriori_rules_count": len(apriori_result_rules),
+            "fpgrowth_rules_count": len(fpgrowth_result_rules),
+            "win_rules_count": sum(row["result"] == "WIN" for row in rules),
+            "lose_rules_count": sum(row["result"] == "LOSE" for row in rules),
             "highest_confidence": max(rules, key=lambda x: x["confidence"], default=None),
             "highest_lift": max(rules, key=lambda x: x["lift"], default=None),
             "rules": sorted(rules, key=lambda row: (-row["confidence"], -row["lift"])),
